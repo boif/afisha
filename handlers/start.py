@@ -61,7 +61,7 @@ async def back_to_menu(message: types.Message, state: FSMContext):
 
 async def choose_category(message: types.Message, state: FSMContext):
     if await state.get_state() == States.CHOOSE_TERRITORY:
-        await back_to_menu(message, state)
+        await message.answer('Пожалуйста выберите район из меню', reply_markup=area_menu)
         return
 
         # Save the chosen category in the user's state
