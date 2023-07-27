@@ -34,7 +34,7 @@ async def start(message: types.Message, state: FSMContext):
     await state.finish()
     user_id = message.from_user.username
     add_user_to_db(user_id)
-    await message.answer("Добро пожаловать!", reply_markup=menu)
+    await message.answer("Добро пожаловать!\nВыберите категорию!", reply_markup=menu)
 
 
 async def show_profile(message: types.Message):
