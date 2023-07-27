@@ -1,6 +1,16 @@
 from aiogram import types, Dispatcher
 import sqlite3
-from keyboard import menu, profile_menu
+from keyboard import menu, profile_menu, area_menu, backto_menu
+from aiogram.dispatcher import FSMContext
+from aiogram.dispatcher.filters import Command
+
+
+
+class States:
+    CHOOSE_CATEGORY = "choose_category"
+    CHOOSE_TERRITORY = "choose_territory"
+
+
 
 def add_user_to_db(user_id):
     conn = sqlite3.connect('users.db')
@@ -20,47 +30,78 @@ def add_user_to_db(user_id):
 
 
 
-async def start(message: types.Message):
+async def start(message: types.Message, state: FSMContext):
+    await state.finish()
     user_id = message.from_user.username
     add_user_to_db(user_id)
     await message.answer("Добро пожаловать!", reply_markup=menu)
 
 
-
-async def show_profile(query: types.CallbackQuery):
-    user_id = query.from_user.username
+async def show_profile(message: types.Message):
+    user_id = message.from_user.username
     conn = sqlite3.connect('users.db')
     cursor = conn.cursor()
 
-    cursor.execute("SELECT bonus_score FROM users WHERE telegram_username=?", (user_id,))
-    result = cursor.fetchone()
-    bonus_score = result[0] if result else 0
+    # Fetch the bonus score for the user
+    cursor.execute("SELECT bonus_score FROM users WHERE telegram_username = ?", (user_id,))
+    bonus_score = cursor.fetchone()[0]
 
     conn.close()
 
-    await query.answer()
-    await query.message.answer(
-        f"Ваш баланс: {bonus_score}\nПриглашайте друзей в наше приложение и получайте бонусы!",
-        reply_markup=profile_menu
-    )
+    # Send the profile message with the bonus score
+    profile_message = f"Ваш баланс: {bonus_score}\nПриглашайте друзей в наше приложение и получайте бонусы!"
+    await message.answer(profile_message, reply_markup=profile_menu)
 
 
 
-async def show_menu(query: types.CallbackQuery):
-    await query.message.answer("Меню", reply_markup=menu)
+async def back_to_menu(message: types.Message, state: FSMContext):
+    await state.finish()
+    await message.answer("Меню", reply_markup=menu)
 
 
+async def choose_category(message: types.Message, state: FSMContext):
+    if await state.get_state() == States.CHOOSE_TERRITORY:
+        await back_to_menu(message, state)
+        return
 
-async def process_inline_buttons(query: types.CallbackQuery):
-    if query.data == "profile":
-        await show_profile(query)
-    elif query.data == "referral_link":
-        await query.answer("Скопировано")
-    elif query.data == "back":
-        await show_menu(query)
+        # Save the chosen category in the user's state
+    category = message.text
+    await state.update_data(category=category)
+    await state.set_state(States.CHOOSE_TERRITORY)  # Set the state to CHOOSE_TERRITORY
+    await message.answer(f"Вы выбрали категорию: {category}", reply_markup=area_menu)
+
+
+async def choose_area(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    category = data.get("category")
+
+    # Check if a category was already chosen
+    if category:
+        chosen_area = message.text
+        await state.finish()  # Finish the state
+        await message.answer(f"Вы выбрали категорию: {category}\nТерриторию: {chosen_area}", reply_markup=backto_menu)
+    else:
+        await back_to_menu(message, state)
 
 
 
 def reg(dp: Dispatcher):
-    dp.register_message_handler(start, commands=['start'])
-    dp.register_callback_query_handler(process_inline_buttons)
+    dp.register_message_handler(start, commands=['start'], state="*")
+    dp.register_message_handler(show_profile, lambda message: message.text == "Профиль", state="*")
+    dp.register_message_handler(back_to_menu, lambda message: message.text == "Вернуться в меню", state="*")
+    dp.register_message_handler(choose_category,
+                                lambda message: message.text in [
+                                    "Рестораны",
+                                    "Клубы",
+                                    "Бары",
+                                    "Экскурсии",
+                                    "Развлечения",
+                                    "Анонсы"
+                                ],
+                                state='*')
+    dp.register_message_handler(choose_area,
+                                lambda message: message.text in [
+                                    "Сочи центральное",
+                                    "Адлер",
+                                    "Красная поляна"
+                                ], state=States.CHOOSE_TERRITORY)
