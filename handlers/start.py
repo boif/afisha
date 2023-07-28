@@ -2,7 +2,6 @@ from aiogram import types, Dispatcher
 import sqlite3
 from keyboard import menu, profile_menu, area_menu, backto_menu
 from aiogram.dispatcher import FSMContext
-from aiogram.dispatcher.filters import Command
 
 
 
@@ -59,6 +58,8 @@ async def back_to_menu(message: types.Message, state: FSMContext):
     await message.answer("Меню", reply_markup=menu)
 
 
+
+
 async def choose_category(message: types.Message, state: FSMContext):
     if await state.get_state() == States.CHOOSE_TERRITORY:
         await message.answer('Пожалуйста, выберите район из меню', reply_markup=area_menu)
@@ -85,6 +86,18 @@ async def choose_area(message: types.Message, state: FSMContext):
 
 
 
+async def handle_invalid_input(message: types.Message, state: FSMContext):
+    current_state = await state.get_state()
+
+    if current_state == States.CHOOSE_CATEGORY:
+        await message.answer("Извините, я вас не понял.\nПожалуйста, выберите категорию из меню.", reply_markup=menu)
+    elif current_state == States.CHOOSE_TERRITORY:
+        await message.answer("Извините, я вас не понял.\nПожалуйста, выберите район из меню.", reply_markup=area_menu)
+    else:
+        await message.answer("Извините, я вас не понял.\nПожалуйста, выберите пункт из меню.", reply_markup=backto_menu)
+
+
+
 def reg(dp: Dispatcher):
     dp.register_message_handler(start, commands=['start'], state="*")
     dp.register_message_handler(show_profile, lambda message: message.text == "Профиль", state="*")
@@ -105,3 +118,4 @@ def reg(dp: Dispatcher):
                                     "Адлер",
                                     "Красная поляна"
                                 ], state=States.CHOOSE_TERRITORY)
+    dp.register_message_handler(handle_invalid_input, state="*")
